@@ -1,0 +1,5 @@
+# Configuracion critica
+.env
+
+# Cache
+__pycache__/
