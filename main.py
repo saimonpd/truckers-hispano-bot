@@ -2,11 +2,13 @@ import discord
 import asyncio
 from discord.ext import commands
 import os
-from config import TOKEN
+from config.config import TOKEN
+from ui.views.welcome_views import WelcomeView
 
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
+        intents.members = True
 
         # Inicia el bot con su prefijo e intents
         # Starts the bot with its prefix and intents
@@ -29,6 +31,7 @@ class MyBot(commands.Bot):
 
         # aqui iran las views
         # here is going to be the views
+        self.add_view(WelcomeView())
 
         # Carga automaticamente todos los /cogs que tenemos 
         # Automatically loads all the /cogs that we have
