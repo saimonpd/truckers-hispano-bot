@@ -4,6 +4,8 @@ from discord.ext import commands
 import os
 from config.config import TOKEN
 from ui.views.welcome_views import WelcomeView
+from ui.views.event_views import EventView
+from database.connection import init_pool
 
 class MyBot(commands.Bot):
     def __init__(self):
@@ -17,6 +19,9 @@ class MyBot(commands.Bot):
         )
 
     async def setup_hook(self):
+        # Inicia las pools en BD
+        init_pool()
+
         # Usamos setup_hook y no on_ready porque: 
         # - nos permite cargar cogs de manera segura
         # - registrar vistas antes de que el bot este online evitando errores de sincronizacion
@@ -26,6 +31,7 @@ class MyBot(commands.Bot):
 
         # aqui iran las views
         self.add_view(WelcomeView())
+        self.add_view(EventView())
 
         # Carga automaticamente todos los /cogs que tenemos 
         for root, dirs, files in os.walk("cogs"):

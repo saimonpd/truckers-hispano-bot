@@ -1,5 +1,4 @@
 import discord
-import asyncio 
 from discord.ext import commands
 from discord import app_commands
 from utils.dm_utils import send_dm
