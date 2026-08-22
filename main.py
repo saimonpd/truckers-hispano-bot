@@ -1,11 +1,16 @@
 import discord
 import asyncio
+import logging
 from discord.ext import commands
 import os
 from config.config import TOKEN
 from ui.views.welcome_views import WelcomeView
 from ui.views.event_views import EventView
 from database.connection import init_pool
+from utils.startup_checks import run_startup_checks
+
+log = logging.getLogger("main")
+
 
 class MyBot(commands.Bot):
     def __init__(self):
@@ -54,7 +59,32 @@ class MyBot(commands.Bot):
         print(f"Slash commands synced")
 
     async def on_ready(self):
-        print(f"Bot connected: {self.user}")
+        # Las comprobaciones de arranque se ejecutan aqui y no en setup_hook porque
+        # necesitan que el cache de guilds/canales del bot ya este poblado
+        # (bot.guilds esta vacio durante setup_hook, antes de conectar al gateway).
+        todo_ok = await run_startup_checks(self)
+ 
+        if todo_ok:
+            log.info(f"Bot connected: {self.user} — todas las comprobaciones de arranque pasaron correctamente")
+        else:
+            log.warning(
+                f"Bot connected: {self.user} — el bot esta online pero una o mas comprobaciones "
+                "de arranque fallaron (ver log de arriba). Revisa la configuracion antes de dar el "
+                "servicio por operativo."
+            )
 
-bot = MyBot()
-asyncio.run(bot.start(TOKEN))
+def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    )
+ 
+    bot = MyBot()
+    try:
+        asyncio.run(bot.start(TOKEN))
+    except KeyboardInterrupt:
+        log.info("Bot detenido manualmente (KeyboardInterrupt)")
+ 
+ 
+if __name__ == "__main__":
+    main()
