@@ -28,7 +28,8 @@ class Events(commands.Cog):
             app_commands.Choice(name="Servidor privado", value="servpriv"),
             app_commands.Choice(name="TruckersMP | Simulador 1", value="TMP/SIM1"),
             app_commands.Choice(name="TruckersMP | Simulador 2", value="TMP/SIM2"),
-            app_commands.Choice(name="TruckersMP | Arcade", value="TMP/ARC")
+            app_commands.Choice(name="TruckersMP | Arcade", value="TMP/ARC"),
+            app_commands.Choice(name="TruckersMP | Promods", value="PROMODS")
         ]
         )
     async def newevent(

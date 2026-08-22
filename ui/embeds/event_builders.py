@@ -1,83 +1,67 @@
 import discord
 
-DIVIDER = "➖" * 15
-
 def build_event_embed(data: dict) -> discord.Embed:
-    """
-    Construye un Embed limpio y profesional para eventos/convoys.
-    Recibe el diccionario `data` unificado.
-    """
     embed = discord.Embed(
-        title=f"📢 {data.get('titulo', 'Evento VTC')}",
-        description=data.get('descripcion', ''),
-        color=discord.Color.blue()
+        title=f"📢 {data.get('titulo')}",
+        description=data.get('descripcion'),
+        color=discord.Color.greyple()
     )
 
-    # 1. Información General
     embed.add_field(
-        name="🎮 Información General",
+        name="Información",
         value=(
-            f"🎮 **Juego:** {data.get('juego_name', data.get('juego', 'N/A'))}\n"
-            f"🤝 **Tipo:** {data.get('tipo_evento', 'Convoy')}\n"
-            f"🏢 **Organiza:** {data.get('organizador', 'Staff')}\n"
-            f"🌍 **Servidor:** {data.get('servidor_name', data.get('servidor', 'N/A'))}\n"
-            f"{DIVIDER}"
+            f"> 🎮 **Juego:** {data.get('juego_name', data.get('juego'))}\n"
+            f"> 🏢 **Organiza:** {data.get('organizador')}\n"
+            f"> 🌍 **Servidor:** {data.get('servidor_name', data.get('servidor'))}\n"
         ),
         inline=False
     )
 
-    # 2. Fecha y Horarios (soporta Timestamps de Discord si existen)
+    # Timestamps discord
     reunion_str = data.get('discord_reunion', f"{data.get('hora_reunion')} 🇪🇸")
     salida_str = data.get('discord_salida', f"{data.get('hora_salida')} 🇪🇸")
 
     embed.add_field(
-        name="📅 Fecha y Horarios",
+        name="Fecha y Horarios",
         value=(
-            f"🗓️ **Fecha:** {data.get('fecha')}\n"
-            f"🧍 **Reunión:** {reunion_str}\n"
-            f"🚦 **Salida:** {salida_str}\n"
-            f"{DIVIDER}"
+            f"> 🗓️ {data.get('fecha')}\n"
+            f"> 🧍 **Reunión:** {reunion_str}\n"
+            f"> 🚦 **Salida:** {salida_str}\n"
+            "> Horario adaptado a tu zona horaria."
         ),
         inline=False
     )
 
-    # 3. Ruta y Requisitos
     embed.add_field(
-        name="📍 Ruta y Logística",
+        name="Ruta",
         value=(
-            f"🟢 **Origen:** {data.get('ruta_origen', data.get('salida', 'N/A'))}\n"
-            f"🔴 **Destino:** {data.get('ruta_destino', data.get('destino', 'N/A'))}\n"
-            f"⛔ **Parada Intermedia:** {data.get('parada_intermedio', 'Ninguna')}\n"
-            f"📜 **DLCs:** {data.get('dlcs_requeridos', 'No requeridos')}\n"
-            f"{DIVIDER}"
+            f"> 🟢 **Origen:** {data.get('ruta_origen', data.get('salida'))}\n"
+            f"> 🔴 **Destino:** {data.get('ruta_destino', data.get('destino'))}\n"
+            f"> ⛔ **Parada Intermedia:** {data.get('parada_intermedio')}\n"
+            f"> 📜 **DLCs:** {data.get('dlcs_requeridos')}\n"
         ),
         inline=False
     )
 
-    # 4. Detalle de Carga
     embed.add_field(
-        name="📦 Carga y Remolque",
+        name="Carga y Remolque",
         value=(
-            f"📦 **Carga:** {data.get('carga', 'Libre')}\n"
-            f"🛻 **Remolque:** {data.get('trailer', 'Libre')}\n"
-            f"{DIVIDER}"
+            f"> 📦 **Carga:** {data.get('carga')}\n"
+            f"> 🛻 **Remolque:** {data.get('trailer')}\n"
         ),
         inline=False
     )
 
-    # 5. Normativa y Consejos
     embed.add_field(
-        name="🚦 Normativa",
+        name="",
         value=(
-            f"🚦 **Velocidad Máx:** 90 km/h\n"
-            f"📏 **Distancia:** Mantener margen de seguridad\n"
-            f"📌 Respetar las normas de TruckersMP y las indicaciones del Staff.\n"
-            f"{DIVIDER}"
+            f":vertical_traffic_light: **Velocidad máxima:** 90 km/h\n"
+            f":straight_ruler: **Norma obligatoria:** Mantener distancia de seguridad\n"
+            f":heavy_minus_sign: :heavy_minus_sign: :heavy_minus_sign: :heavy_minus_sign: :heavy_minus_sign: "
         ),
         inline=False
     )
 
-    # 6. Lista de Participantes
     participantes = data.get("participantes", [])
     if participantes:
         # Muestra menciones separadas por espacio o salto de línea
@@ -91,7 +75,6 @@ def build_event_embed(data: dict) -> discord.Embed:
         inline=False
     )
 
-    # Imagen y Miniatura opcionales
     if data.get("ruta_imagen"):
         embed.set_image(url=data["ruta_imagen"])
 
