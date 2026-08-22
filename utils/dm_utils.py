@@ -1,6 +1,10 @@
 import discord
+import logging
 
-async def send_dm(user: discord.Member, title: str, description: str):
+log = logging.getLogger("dm_utils")
+
+
+async def send_dm(user: discord.Member, title: str, description: str) -> bool:
     try:
         embed = discord.Embed(
             title=title,
@@ -8,6 +12,18 @@ async def send_dm(user: discord.Member, title: str, description: str):
             color=discord.Color.red()
         )
         await user.send(embed=embed)
+        log.info(f"DM enviado a {user} ({user.id}) — asunto: {title}")
         return True
-    except Exception:
+
+    except discord.Forbidden:
+        # Usuario bloquea al bot o tiene los MD cerrados.
+        log.warning(f"No se pudo enviar DM a {user} ({user.id}): MDs cerrados o bot bloqueado")
+        return False
+
+    except discord.HTTPException as e:
+        log.error(f"Error de la API de Discord al enviar DM a {user} ({user.id}): {e}")
+        return False
+
+    except Exception as e:
+        log.error(f"Error inesperado al enviar DM a {user} ({user.id}): {e}")
         return False
