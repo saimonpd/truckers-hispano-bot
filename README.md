@@ -86,6 +86,44 @@ Todos los comandos capturan de forma diferenciada:
 
 `/admin_editarnombre` además envía un MD al usuario afectado informando del cambio; si el usuario tiene los MDs cerrados, se captura `discord.Forbidden` sin romper el flujo principal.
 
+### Sistema de Empresas
+Permite a los encargados registrar empresas de la comunidad directamente desde Discord: se asigna un rol de representante y un rol propio de la empresa al dueño, se crea un canal privado visible solo para la empresa y el equipo encargado, y se persiste el registro en base de datos. También permite eliminar una empresa revirtiendo todo lo anterior.
+
+**Comandos:** `/registrar_empresa` y `/eliminar_empresa` — Ambos restringidos al rol `ROLE_ENCARGADO_EMPRESAS`.
+
+**Parámetros de `/registrar_empresa`:** `nombre_empresa` (texto), `dueño_empresa` (mención de usuario).
+
+**Parámetros de `/eliminar_empresa`:** `rol_empresa` (mención del rol de la empresa a eliminar).
+
+**Flujo de creación:**
+/registrar_empresa (comando)
+→ crear_empresa() [servicio]
+→ comprobación de nombre duplicado (discord.utils.get sobre guild.roles)
+→ _crear_rol_empresa() [crea el rol con color aleatorio y hoist=True]
+→ miembro.add_roles() [asigna rol de empresa + ROLE_REPRESENTANTE_EMPRESA al dueño]
+→ _crear_canal_empresa() [canal privado bajo CATEGORIA_EMPRESAS_ID, visible para el rol de empresa y ROLE_ENCARGADO_EMPRESAS]
+→ guardar_empresa() [persiste en BD: nombre, dueño, rol_id, canal_id]
+
+**Flujo de eliminación:**
+/eliminar_empresa (comando)
+→ eliminar_empresa() [servicio]
+→ obtener_empresa_por_rol_id() [recupera la empresa a partir del rol mencionado]
+→ comprobación: el comando no puede ejecutarse desde el propio canal de la empresa
+→ miembro.remove_roles() [quita el rol de empresa y el de representante al dueño]
+→ canal_empresa.delete() [borra el canal]
+→ rol_empresa.delete() [borra el rol]
+→ eliminar_empresa_bd() [borra el registro de BD]
+
+
+**Reglas de negocio:**
+- No se puede registrar una empresa con un nombre que ya coincide con un rol existente en el servidor (comprobación previa a crear nada, evita duplicados).
+- No se puede ejecutar `/eliminar_empresa` desde el propio canal de la empresa que se está eliminando: al borrarse el canal a mitad del comando, Discord invalida el contexto de la interacción y el mensaje de confirmación final fallaría con `discord.NotFound` (`Unknown Message`). El servicio lo valida explícitamente y lanza un `ValueError` legible antes de tocar nada.
+- La empresa se identifica siempre por el rol mencionado (`rol_id`), no por nombre en texto libre, evitando ambigüedades por mayúsculas, espacios o nombres duplicados.
+
+**Manejo de errores y reversión (rollback):** si falla cualquier paso de `crear_empresa()` después de haber creado el rol y/o el canal en Discord (por ejemplo, un error al guardar en BD), el servicio revierte lo ya creado —borra el canal y el rol— para no dejar recursos huérfanos en el servidor. En `eliminar_empresa()`, si el dueño ya no está en el servidor se registra un `warning` y se continúa con el resto de la limpieza en vez de abortar.
+
+**Diseño de la capa de servicio:** al igual que en el sistema de eventos, `crear_empresa(guild, data)` y `eliminar_empresa(guild, rol_id, canal_interaccion)` reciben un `discord.Guild` (necesario para operar roles/canales) junto a tipos primitivos (`dict`, `str`), no objetos de comando o interacción — mismo patrón pensado para una futura reutilización desde una API.
+
 ## Arquitectura
 El proyecto sigue una estructura por capas para mantener separada la lógica de Discord de la lógica de negocio:
 
@@ -95,16 +133,19 @@ cogs/
     commands/                -> Comandos de barra (slash commands), delegan en services/
         admin.py                 (moderación)
         events.py                (creación de eventos)
+        company.py               (registro y eliminacion de empresas)
     systems/                 -> Escucha eventos de Discord (on_member_join, etc.), delega en services/
         welcome.py
 services/                    -> Lógica de negocio, independiente de discord.py en su interfaz pública
     events_services.py
     welcome_services.py
     moderation_services.py
+    company_services.py
 database/
     connection.py            -> Pool de conexiones (mariadb.ConnectionPool)
     repositories/            -> Único punto de acceso a la base de datos
         event_repository.py
+        compnay_repository.py
 ui/
     embeds/                  -> Constructores de embeds (lógica de presentación de mensajes)
     views/                   -> Componentes de interfaz de Discord (botones, vistas persistentes)
@@ -136,6 +177,8 @@ Puntos concretos que ya lo permiten hoy:
 
 Punto de fricción a tener en cuenta: `create_event()` sigue recibiendo el objeto `bot` para publicar el evento en el canal de Discord (dentro de `_publish_on_discord()`, ya aislada como función privada). Si en el futuro se quiere crear un evento desde la web sin pasar por el bot (o el bot y la API corren como procesos separados), este es el único punto que habría que desacoplar — separando "guardar en BD" de "publicar en Discord" como dos pasos independientes que la API pueda orquestar según el caso.
 
+El sistema de empresas sigue el mismo contrato: `crear_empresa(guild, data)` recibe `data` como `dict` plano (`nombre_empresa`, `dueño_empresa`), igual que `eliminar_empresa(guild, rol_id, canal_interaccion=None)` recibe primitivos en vez de un `discord.Interaction`. El único acoplamiento a Discord que permanece —igual que en eventos— es la necesidad de un `discord.Guild` real para poder crear/borrar roles y canales, ya que esa parte de la lógica no tiene sentido fuera de Discord.
+
 ## Comprobaciones de arranque (Startup Checks)
 Justo después de que el bot se conecta (`on_ready`), y tras haber cargado todos los cogs y sincronizado los slash commands en `setup_hook`, se ejecuta `run_startup_checks()` (`utils/startup_checks.py`). Es un "smoke test" contra el entorno real, pensado para detectar en el arranque —y no en producción, a mitad de una interacción de un usuario— que algo de la configuración no encaja con lo que hay realmente en Discord o en la base de datos.
 
@@ -143,6 +186,9 @@ Justo después de que el bot se conecta (`on_ready`), y tras haber cargado todos
 - **Base de datos**: obtiene una conexión del pool y ejecuta `SELECT 1` para confirmar que la BD responde.
 - **Canales** (`CHANNEL_WELCOME`, `CHANNEL_EVENTS`): confirma que cada ID configurado corresponde a un canal real y accesible por el bot (usa `get_channel` y recurre a `fetch_channel` si no está en caché).
 - **Roles** (`AUTO_ROLE_ID`, `ENCARGADO_EVENTOS`, `ROLE_NOTIFICACION_EVENTOS`): se comprueban por cada servidor en el que el bot ya está presente al arrancar, ya que un rol pertenece a un servidor concreto.
+- **Roles de empresas** (`ROLE_ENCARGADO_EMPRESAS`, `ROLE_REPRESENTANTE_EMPRESA`): comprobados igual que el resto de roles, por cada servidor en el que el bot está presente.
+- **Categoría de empresas** (`CATEGORIA_EMPRESAS_ID`): confirma que la categoría configurada existe y es accesible, reutilizando la misma comprobación que los canales (`get_channel`/`fetch_channel`), ya que una categoría es también un tipo de canal en discord.py.
+- **Permisos del bot** (`manage_roles`, `manage_channels`): confirma que el rol del bot tiene estos permisos a nivel de servidor, necesarios para crear/editar/borrar roles y canales de empresas. No cubre la jerarquía de roles (que el rol del bot esté por encima del rol que crea), ya que eso depende de la posición relativa en el momento de cada operación y no de un permiso fijo; ese caso puntual se maneja con un `try/except discord.HTTPException` en `_crear_rol_empresa()`.
 - **Vistas persistentes**: confirma por nombre de clase que `EventView` quedó registrada en `bot.persistent_views`, para detectar antes de tiempo el escenario en el que sus botones ("🔔 Avisos Eventos", "✅ Apuntarse / Desapuntarse") dejarían de responder tras un reinicio. `WelcomeView` queda fuera de esta comprobación a propósito: al estar formada solo por botones `discord.ButtonStyle.link`, no lleva `custom_id` y Discord no la necesita "recordar" tras un reinicio (un botón de tipo link abre una URL sin pasar por el bot), así que nunca aparecerá en `bot.persistent_views` aunque esté correctamente registrada con `add_view()`.
 - **Slash commands**: confirma que el árbol de comandos no está vacío antes de darse por sincronizado.
 
@@ -200,13 +246,14 @@ DB_PORT =
 ### IDs del servidor
 Deben actualizarse con los valores reales de tu servidor de Discord:
 
-- `config/channels.py`: `CHANNEL_WELCOME`, `CHANNEL_EVENTS`
-- `config/roles.py`: `AUTO_ROLE_ID`, `ENCARGADO_EVENTOS`, `ROLE_NOTIFICACION_EVENTOS`
+- `config/channels.py`: `CHANNEL_WELCOME`, `CHANNEL_EVENTS`, `CATEGORIA_EMPRESAS_ID`
+- `config/roles.py`: `AUTO_ROLE_ID`, `ENCARGADO_EVENTOS`, `ROLE_NOTIFICACION_EVENTOS`, `ROLE_ENCARGADO_EMPRESAS`, `ROLE_REPRESENTANTE_EMPRESA`
 
 ### Base de datos
-El bot usa MariaDB con un pool de conexiones (`mariadb.ConnectionPool`, tamaño 5) inicializado en `setup_hook` antes de cargar los cogs. Tablas utilizadas por el sistema de eventos:
+El bot usa MariaDB con un pool de conexiones (`mariadb.ConnectionPool`, tamaño 5) inicializado en `setup_hook` antes de cargar los cogs. Tablas utilizadas:
 - `eventos` — un registro por evento, indexado por `message_id`
 - `participantes_evento` — relación `message_id` ↔ `discord_id` de los usuarios apuntados
+- `empresas` — un registro por empresa, con `nombre_empresa`, `dueño_empresa`, `rol_id` y `canal_id`
 
 ## Tecnologías
 - Python 3.14
@@ -220,7 +267,7 @@ El bot usa MariaDB con un pool de conexiones (`mariadb.ConnectionPool`, tamaño 
 Requisitos previos:
 - Python 3.14
 - Una aplicación de bot de Discord con el **Server Members Intent** activado en el Discord Developer Portal
-- Una instancia de MariaDB accesible con las tablas `eventos` y `participantes_evento`
+- Una instancia de MariaDB accesible con las tablas `eventos`, `participantes_evento` y `empresas`
 
 Instalación:
 ```

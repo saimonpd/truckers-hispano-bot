@@ -18,6 +18,14 @@ from discord.ext import commands
 from database.connection import obtener_conexion
 from config.channels import CHANNEL_WELCOME, CHANNEL_EVENTS
 from config.roles import AUTO_ROLE_ID, ENCARGADO_EVENTOS, ROLE_NOTIFICACION_EVENTOS
+from config.roles import (
+    AUTO_ROLE_ID,
+    ENCARGADO_EVENTOS,
+    ROLE_NOTIFICACION_EVENTOS,
+    ROLE_ENCARGADO_EMPRESAS,
+    ROLE_REPRESENTANTE_EMPRESA,
+)
+from config.channels import CHANNEL_WELCOME, CHANNEL_EVENTS, CATEGORIA_EMPRESAS_ID
 
 log = logging.getLogger("startup")
 
@@ -104,6 +112,16 @@ def _check_commands_synced(bot: commands.Bot) -> CheckResult:
     nombres = ", ".join(c.name for c in comandos)
     return CheckResult("Slash commands", True, f"{len(comandos)} comando(s): {nombres}")
 
+def _check_bot_permission(guild: discord.Guild, permission: str, label: str) -> CheckResult:
+    """Comprueba que el bot tiene un permiso concreto a nivel de servidor."""
+    tiene_permiso = getattr(guild.me.guild_permissions, permission, False)
+    if not tiene_permiso:
+        return CheckResult(
+            f"Permiso '{label}' en {guild.name}",
+            False,
+            f"El bot no tiene el permiso '{permission}' — revisa el rol del bot en Roles del servidor"
+        )
+    return CheckResult(f"Permiso '{label}' en {guild.name}", True)
 
 async def run_startup_checks(bot: commands.Bot) -> bool:
     """
@@ -118,6 +136,7 @@ async def run_startup_checks(bot: commands.Bot) -> bool:
     resultados.append(await _check_database())
     resultados.append(await _check_channel(bot, CHANNEL_WELCOME, "Bienvenida"))
     resultados.append(await _check_channel(bot, CHANNEL_EVENTS, "Eventos"))
+    resultados.append(await _check_channel(bot, CATEGORIA_EMPRESAS_ID, "Categoría Empresas"))
     resultados.append(_check_persistent_views(bot))
     resultados.append(_check_commands_synced(bot))
 
@@ -125,6 +144,10 @@ async def run_startup_checks(bot: commands.Bot) -> bool:
         resultados.append(_check_role(guild, AUTO_ROLE_ID, "AUTO_ROLE_ID"))
         resultados.append(_check_role(guild, ENCARGADO_EVENTOS, "ENCARGADO_EVENTOS"))
         resultados.append(_check_role(guild, ROLE_NOTIFICACION_EVENTOS, "ROLE_NOTIFICACION_EVENTOS"))
+        resultados.append(_check_role(guild, ROLE_ENCARGADO_EMPRESAS, "ROLE_ENCARGADO_EMPRESAS"))
+        resultados.append(_check_role(guild, ROLE_REPRESENTANTE_EMPRESA, "ROLE_REPRESENTANTE_EMPRESA"))
+        resultados.append(_check_bot_permission(guild, "manage_roles", "Gestionar roles"))
+        resultados.append(_check_bot_permission(guild, "manage_channels", "Gestionar canales"))
 
     todo_ok = True
     log.info("── Comprobaciones de arranque ──")
