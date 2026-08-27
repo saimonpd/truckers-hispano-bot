@@ -99,9 +99,9 @@ Permite a los encargados registrar empresas de la comunidad directamente desde D
 /registrar_empresa (comando)
 → crear_empresa() [servicio]
 → comprobación de nombre duplicado (discord.utils.get sobre guild.roles)
-→ _crear_rol_empresa() [crea el rol con color aleatorio y hoist=True]
+→ crear_rol_empresa() [crea el rol con color aleatorio y hoist=True]
 → miembro.add_roles() [asigna rol de empresa + ROLE_REPRESENTANTE_EMPRESA al dueño]
-→ _crear_canal_empresa() [canal privado bajo CATEGORIA_EMPRESAS_ID, visible para el rol de empresa y ROLE_ENCARGADO_EMPRESAS]
+→ crear_canal_empresa() [canal privado bajo CATEGORIA_EMPRESAS_ID, visible para el rol de empresa y ROLE_ENCARGADO_EMPRESAS]
 → guardar_empresa() [persiste en BD: nombre, dueño, rol_id, canal_id]
 
 **Flujo de eliminación:**
@@ -188,7 +188,7 @@ Justo después de que el bot se conecta (`on_ready`), y tras haber cargado todos
 - **Roles** (`AUTO_ROLE_ID`, `ENCARGADO_EVENTOS`, `ROLE_NOTIFICACION_EVENTOS`): se comprueban por cada servidor en el que el bot ya está presente al arrancar, ya que un rol pertenece a un servidor concreto.
 - **Roles de empresas** (`ROLE_ENCARGADO_EMPRESAS`, `ROLE_REPRESENTANTE_EMPRESA`): comprobados igual que el resto de roles, por cada servidor en el que el bot está presente.
 - **Categoría de empresas** (`CATEGORIA_EMPRESAS_ID`): confirma que la categoría configurada existe y es accesible, reutilizando la misma comprobación que los canales (`get_channel`/`fetch_channel`), ya que una categoría es también un tipo de canal en discord.py.
-- **Permisos del bot** (`manage_roles`, `manage_channels`): confirma que el rol del bot tiene estos permisos a nivel de servidor, necesarios para crear/editar/borrar roles y canales de empresas. No cubre la jerarquía de roles (que el rol del bot esté por encima del rol que crea), ya que eso depende de la posición relativa en el momento de cada operación y no de un permiso fijo; ese caso puntual se maneja con un `try/except discord.HTTPException` en `_crear_rol_empresa()`.
+- **Permisos del bot** (`manage_roles`, `manage_channels`): confirma que el rol del bot tiene estos permisos a nivel de servidor, necesarios para crear/editar/borrar roles y canales de empresas. No cubre la jerarquía de roles (que el rol del bot esté por encima del rol que crea), ya que eso depende de la posición relativa en el momento de cada operación y no de un permiso fijo; ese caso puntual se maneja con un `try/except discord.HTTPException` en `crear_rol_empresa()`.
 - **Vistas persistentes**: confirma por nombre de clase que `EventView` quedó registrada en `bot.persistent_views`, para detectar antes de tiempo el escenario en el que sus botones ("🔔 Avisos Eventos", "✅ Apuntarse / Desapuntarse") dejarían de responder tras un reinicio. `WelcomeView` queda fuera de esta comprobación a propósito: al estar formada solo por botones `discord.ButtonStyle.link`, no lleva `custom_id` y Discord no la necesita "recordar" tras un reinicio (un botón de tipo link abre una URL sin pasar por el bot), así que nunca aparecerá en `bot.persistent_views` aunque esté correctamente registrada con `add_view()`.
 - **Slash commands**: confirma que el árbol de comandos no está vacío antes de darse por sincronizado.
 
