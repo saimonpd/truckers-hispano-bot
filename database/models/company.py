@@ -11,11 +11,3 @@ CREATE TABLE IF NOT EXISTS empresa (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 """
-
-@dataclass
-class Empresa:
-    nombre_empresa: str
-    dueño_empresa: str
-    rol_id: str
-    canal_id: str
-    id: Optional[int] = None
