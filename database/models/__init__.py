@@ -1,8 +1,10 @@
 from database.models.company import TABLE_SCHEMA as COMPANY_TABLE
 from database.models.event import TABLE_SCHEMA as EVENT_TABLE
+from database.models.event_participant import TABLE_SCHEMA as EVENT_PARTICIPANT_TABLE
 
 # Lista ordenada de todos los esquemas a crear
 ALL_TABLES = [
     COMPANY_TABLE,
     EVENT_TABLE,
+    EVENT_PARTICIPANT_TABLE
 ]

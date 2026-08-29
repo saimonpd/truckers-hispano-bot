@@ -1,6 +1,3 @@
-from dataclasses import dataclass
-from typing import Optional
-
 TABLE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS empresa (
     id INT AUTO_INCREMENT PRIMARY KEY,

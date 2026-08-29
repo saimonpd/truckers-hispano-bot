@@ -5,7 +5,7 @@ from config.roles import ROLE_ENCARGADO_EMPRESAS, ROLE_REPRESENTANTE_EMPRESA
 from config.channels import CATEGORIA_EMPRESAS_ID
 from database.repositories.company_repository import guardar_empresa, obtener_empresa_por_rol_id, eliminar_empresa_bd
 
-async def crear_rol_empresa(guild: discord.Guild, nombre_empresa: str) -> discord.Role:
+async def _crear_rol_empresa(guild: discord.Guild, nombre_empresa: str) -> discord.Role:
     rol = await guild.create_role(
         name=nombre_empresa,
         hoist=True,
@@ -24,7 +24,7 @@ async def crear_rol_empresa(guild: discord.Guild, nombre_empresa: str) -> discor
     return rol
 
 
-async def crear_canal_empresa(
+async def _crear_canal_empresa(
     guild: discord.Guild, nombre_empresa: str, rol_empresa: discord.Role) -> discord.TextChannel:
     categoria = guild.get_channel(CATEGORIA_EMPRESAS_ID)
     rol_encargado = guild.get_role(ROLE_ENCARGADO_EMPRESAS)
@@ -63,12 +63,12 @@ async def crear_empresa(guild: discord.Guild, data: dict) -> dict:
 
     try:
         rol_representante = guild.get_role(ROLE_REPRESENTANTE_EMPRESA)
-        rol_empresa = await crear_rol_empresa(guild, data["nombre_empresa"])
+        rol_empresa = await _crear_rol_empresa(guild, data["nombre_empresa"])
 
         miembro = await guild.fetch_member(int(data["dueño_empresa"]))
         await miembro.add_roles(rol_representante, rol_empresa)
 
-        canal_empresa = await crear_canal_empresa(guild, data["nombre_empresa"], rol_empresa)
+        canal_empresa = await _crear_canal_empresa(guild, data["nombre_empresa"], rol_empresa)
 
         data["rol_id"] = str(rol_empresa.id)
         data["canal_id"] = str(canal_empresa.id)
