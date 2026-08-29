@@ -1,5 +1,6 @@
 import logging
-import mariadb
+import pymysql
+from dbutils.pooled_db import PooledDB
 from config.config import DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT
 from database.models import ALL_TABLES
 
@@ -12,11 +13,12 @@ def ensure_database_and_tables():
     """Crea la base de datos y las tablas si no existen."""
     try:
         # 1. Crear la BD si no existe
-        conn = mariadb.connect(
+        conn = pymysql.connect(
             host=DB_HOST,
             user=DB_USER,
             password=DB_PASSWORD,
-            port=DB_PORT
+            port=DB_PORT,
+            autocommit=True
         )
         cursor = conn.cursor()
         cursor.execute(
@@ -27,23 +29,23 @@ def ensure_database_and_tables():
         conn.close()
 
         # 2. Crear las tablas registradas en models
-        conn = mariadb.connect(
+        conn = pymysql.connect(
             host=DB_HOST,
             user=DB_USER,
             password=DB_PASSWORD,
             database=DB_NAME,
-            port=DB_PORT
+            port=DB_PORT,
+            autocommit=True
         )
         cursor = conn.cursor()
         for table_query in ALL_TABLES:
             cursor.execute(table_query)
         
-        conn.commit()
         cursor.close()
         conn.close()
         log.info(f"Esquema de BD verificado/creado correctamente ({DB_NAME}).")
 
-    except mariadb.Error as e:
+    except Exception as e:
         log.error(f"Error al verificar/crear la BD o tablas: {e}")
         raise
 
@@ -53,17 +55,22 @@ def init_pool():
     try:
         ensure_database_and_tables()
 
-        pool = mariadb.ConnectionPool(
+        pool = PooledDB(
+            creator=pymysql,
+            mincached=1,
+            maxcached=5,
+            maxconnections=10,
+            blocking=True,
             host=DB_HOST,
             user=DB_USER,
             password=DB_PASSWORD,
             database=DB_NAME,
             port=DB_PORT,
-            pool_name="bot_pool",
-            pool_size=5
+            charset="utf8mb4",
+            autocommit=False
         )
         log.info(f"Connection pool iniciado (host={DB_HOST}, db={DB_NAME}, pool_size=5)")
-    except mariadb.Error as e:
+    except Exception as e:
         log.error(f"No se pudo iniciar el pool de conexiones a la BD (host={DB_HOST}, db={DB_NAME}): {e}")
         raise
 
@@ -72,4 +79,4 @@ def obtener_conexion():
     if pool is None:
         log.error("Se intentó obtener una conexión antes de inicializar el pool (init_pool() no se ha llamado)")
         raise RuntimeError("El pool de conexiones no está inicializado. Llama a init_pool() primero.")
-    return pool.get_connection()
+    return pool.connection()
