@@ -124,6 +124,54 @@ Permite a los encargados registrar empresas de la comunidad directamente desde D
 
 **Diseño de la capa de servicio:** al igual que en el sistema de eventos, `crear_empresa(guild, data)` y `eliminar_empresa(guild, rol_id, canal_interaccion)` reciben un `discord.Guild` (necesario para operar roles/canales) junto a tipos primitivos (`dict`, `str`), no objetos de comando o interacción — mismo patrón pensado para una futura reutilización desde una API.
 
+### Sistema de Sanciones
+Permite al staff registrar, consultar y eliminar sanciones asociadas a un usuario, dejando constancia en base de datos de quién la impuso y el motivo. El borrado de una sanción requiere confirmación explícita mediante botones antes de ejecutarse, para evitar eliminaciones accidentales.
+
+**Comandos:** `/sancionar`, `/eliminar_sancion`, `/ver_sanciones` — Restringidos al rol `ROLE_STAFF`.
+
+**Parámetros de `/sancionar`:** `usuario` (mención de usuario), `razon` (texto).
+
+**Parámetros de `/eliminar_sancion`:** `id` (identificador numérico de la sanción).
+
+**Parámetros de `/ver_sanciones`:** `usuario` (mención de usuario).
+
+**Flujo de registro:**
+/sancionar (comando)
+→ sanction_register() [servicio]
+→ add_sanction() [inserta en BD, devuelve el id generado]
+→ confirmación por texto al staff (ephemeral)
+
+**Flujo de eliminación (con confirmación):**
+
+/eliminar_sancion (comando)
+→ sanction_delete() [servicio]
+→ get_sanction() [recupera la sanción por id]
+→ sanction_confirmation_delete_embed() [construye el embed de confirmación]
+→ sanction_confirmation_delete_view() [construye los botones Confirmar/Cancelar]
+→ se muestra el embed + view al staff (ephemeral)
+
+Usuario pulsa "Confirmar"
+→ sanction_delete_confirm() [servicio]
+→ delete_sanction() [borra el registro de BD]
+→ se edita el mensaje confirmando el resultado
+
+Usuario pulsa "Cancelar"
+→ se edita el mensaje indicando que la eliminación fue cancelada, sin tocar la BD
+
+**Flujo de consulta:**
+
+/ver_sanciones (comando)
+→ sanction_list() [servicio]
+→ user_sanctions() [recupera todas las sanciones del usuario desde BD]
+→ sanction_list_embed() [construye el embed con la lista, máx. 25 entradas por límite de Discord]
+→ se muestra el embed al staff (ephemeral)
+
+**Reglas de negocio:**
+- Eliminar una sanción exige una confirmación explícita por botones; solo el moderador que ejecutó el comando puede pulsar Confirmar/Cancelar (`interaction_check` en la view).
+- Si el id de sanción indicado no existe, el servicio no llega a mostrar la confirmación y responde directamente con un mensaje de error.
+- Un usuario sin sanciones registradas recibe un mensaje informativo en vez de un embed vacío.
+
+**Diseño de la capa de servicio:** igual que en eventos y empresas, `sanction_register(bot, data)`, `sanction_delete(bot, data)` y `sanction_list(bot, data)` reciben un `dict` plano (`mod`, `usuario`, `razon`, `id_sancion` según el caso), no objetos de `discord.py` — mismo contrato pensado para una futura API. El único acoplamiento a Discord es la construcción de embeds/views, aislada en `ui/embeds/` y `ui/views/`.
 ## Arquitectura
 El proyecto sigue una estructura por capas para mantener separada la lógica de Discord de la lógica de negocio:
 
@@ -134,6 +182,7 @@ cogs/
         admin.py                 (moderación)
         events.py                (creación de eventos)
         company.py               (registro y eliminacion de empresas)
+        sanction.py              (sanciones)
     systems/                 -> Escucha eventos de Discord (on_member_join, etc.), delega en services/
         welcome.py
 services/                    -> Lógica de negocio, independiente de discord.py en su interfaz pública
@@ -141,14 +190,22 @@ services/                    -> Lógica de negocio, independiente de discord.py 
     welcome_services.py
     moderation_services.py
     company_services.py
+    sanction_services.py
 database/
     connection.py            -> Pool de conexiones (mariadb.ConnectionPool)
     repositories/            -> Único punto de acceso a la base de datos
         event_repository.py
         compnay_repository.py
+        sanction_repository.py
 ui/
     embeds/                  -> Constructores de embeds (lógica de presentación de mensajes)
+        event_builders.py
+        sanction_builder.py
+        welcome_builders.py
     views/                   -> Componentes de interfaz de Discord (botones, vistas persistentes)
+        event_views.py
+        sanction_view.py
+        welcome_view.py
 utils/
     validators/              -> Validación de datos y reglas de negocio (fechas, formatos, etc.)
     dm_utils.py              -> Envío de mensajes directos
@@ -186,6 +243,7 @@ Justo después de que el bot se conecta (`on_ready`), y tras haber cargado todos
 - **Base de datos**: obtiene una conexión del pool y ejecuta `SELECT 1` para confirmar que la BD responde.
 - **Canales** (`CHANNEL_WELCOME`, `CHANNEL_EVENTS`): confirma que cada ID configurado corresponde a un canal real y accesible por el bot (usa `get_channel` y recurre a `fetch_channel` si no está en caché).
 - **Roles** (`AUTO_ROLE_ID`, `ENCARGADO_EVENTOS`, `ROLE_NOTIFICACION_EVENTOS`): se comprueban por cada servidor en el que el bot ya está presente al arrancar, ya que un rol pertenece a un servidor concreto.
+- **Rol de staff** (`ROLE_STAFF`): comprobado igual que el resto de roles, por cada servidor en el que el bot está presente — necesario para los comandos `/sancionar`, `/eliminar_sancion` y `/ver_sanciones`.
 - **Roles de empresas** (`ROLE_ENCARGADO_EMPRESAS`, `ROLE_REPRESENTANTE_EMPRESA`): comprobados igual que el resto de roles, por cada servidor en el que el bot está presente.
 - **Categoría de empresas** (`CATEGORIA_EMPRESAS_ID`): confirma que la categoría configurada existe y es accesible, reutilizando la misma comprobación que los canales (`get_channel`/`fetch_channel`), ya que una categoría es también un tipo de canal en discord.py.
 - **Permisos del bot** (`manage_roles`, `manage_channels`): confirma que el rol del bot tiene estos permisos a nivel de servidor, necesarios para crear/editar/borrar roles y canales de empresas. No cubre la jerarquía de roles (que el rol del bot esté por encima del rol que crea), ya que eso depende de la posición relativa en el momento de cada operación y no de un permiso fijo; ese caso puntual se maneja con un `try/except discord.HTTPException` en `_crear_rol_empresa()`.
@@ -247,13 +305,14 @@ DB_PORT =
 Deben actualizarse con los valores reales de tu servidor de Discord:
 
 - `config/channels.py`: `CHANNEL_WELCOME`, `CHANNEL_EVENTS`, `CATEGORIA_EMPRESAS_ID`
-- `config/roles.py`: `AUTO_ROLE_ID`, `ENCARGADO_EVENTOS`, `ROLE_NOTIFICACION_EVENTOS`, `ROLE_ENCARGADO_EMPRESAS`, `ROLE_REPRESENTANTE_EMPRESA`
+- `config/roles.py`: `AUTO_ROLE_ID`, `ENCARGADO_EVENTOS`, `ROLE_NOTIFICACION_EVENTOS`, `ROLE_ENCARGADO_EMPRESAS`, `ROLE_REPRESENTANTE_EMPRESA`, `ROLE_STAFF`
 
 ### Base de datos
 El bot usa MariaDB con un pool de conexiones (`mariadb.ConnectionPool`, tamaño 5) inicializado en `setup_hook` antes de cargar los cogs. Tablas utilizadas:
 - `eventos` — un registro por evento, indexado por `message_id`
 - `participantes_evento` — relación `message_id` ↔ `discord_id` de los usuarios apuntados
 - `empresas` — un registro por empresa, con `nombre_empresa`, `dueño_empresa`, `rol_id` y `canal_id`
+- `sanciones` — un registro por sanción, con `usuario_id`, `mod_id`, `razon` y `fecha`, indexado por `usuario_id`
 
 ## Tecnologías
 - Python 3.14
@@ -267,7 +326,7 @@ El bot usa MariaDB con un pool de conexiones (`mariadb.ConnectionPool`, tamaño 
 Requisitos previos:
 - Python 3.14
 - Una aplicación de bot de Discord con el **Server Members Intent** activado en el Discord Developer Portal
-- Una instancia de MariaDB accesible con las tablas `eventos`, `participantes_evento` y `empresas`
+- Una instancia de MariaDB accesible con las tablas `eventos`, `participantes_evento`, `empresas` y `sanciones`
 
 Instalación:
 ```
