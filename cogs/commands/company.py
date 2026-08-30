@@ -5,6 +5,9 @@ from discord import app_commands
 from config.roles import ROLE_ENCARGADO_EMPRESAS
 from services.company_services import crear_empresa, eliminar_empresa
 
+import logging
+log = logging.getLogger("company")
+
 class Company(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
