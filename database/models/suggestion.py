@@ -10,15 +10,16 @@ class SuggestionStatus(StrEnum):
 TABLE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS suggestion (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    id_user BIGINT NOT NULL,
-    id_channel BIGINT NOT NULL,
-    id_message BIGINT NOT NULL,
-    message VARCHAR(255) NOT NULL,
+    id_user VARCHAR(64) NOT NULL,
+    id_channel VARCHAR(64) NOT NULL,
+    id_message VARCHAR(64) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
     positive_votes INT DEFAULT 0,
     negative_votes INT DEFAULT 0,
-    moderator_id BIGINT,
+    moderator_id VARCHAR(64),
     moderator_name VARCHAR(255),
-    moderator_answer VARCHAR(255),
+    moderator_answer TEXT,
     status ENUM('Pendiente','En Revisión','Aceptada','Rechazada') DEFAULT 'Pendiente',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
