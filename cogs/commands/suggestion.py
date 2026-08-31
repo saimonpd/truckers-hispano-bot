@@ -1,10 +1,9 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from flask import app
 from services.suggestion_services import suggestion_create, suggestion_resolve
 from config.roles import ROLE_STAFF
-import database.models.suggestion as SuggestionStatus
+from database.models.suggestion import SuggestionStatus
 
 import logging 
 log = logging.getLogger("events")
@@ -13,7 +12,7 @@ class Suggestion(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="crear sugerencia", description="Crea una sugerencia para el servidor")
+    @app_commands.command(name="crear_sugerencia", description="Crea una sugerencia para el servidor")
     async def c_suggestion_create(
         self,
         interaction: discord.Interaction,
@@ -41,8 +40,8 @@ class Suggestion(commands.Cog):
             log.error(f"Error creando sugerencia '{suggestion_title}': {e}")
             await interaction.followup.send(f"❌ {e}")
 
-    @app.commands.command(name="resolver sugerencia", description="[Solo administración] Resuelve una sugerencia existente")
-    @app.commands.check.has_role(ROLE_STAFF)
+    @app_commands.command(name="resolver_sugerencia", description="[Solo administración] Resuelve una sugerencia existente")
+    @app_commands.checks.has_role(ROLE_STAFF)
     @app_commands.describe(
         suggestion_id="ID de la sugerencia a resolver",
         resolution="Estado al que cambiará la sugerencia",
