@@ -28,7 +28,7 @@ class Suggestion(commands.Cog):
 
         # Guardar la sugerencia en la base de datos y enviar un mensaje de confirmación al usuario.
         try:
-            await suggestion_create(channel=interaction.channel, data=data)
+            await suggestion_create(channel=interaction.channel, interaction=interaction, data=data)
             await interaction.followup.send(f"✅ Sugerencia creada con éxito.")
 
         except ValueError as e:

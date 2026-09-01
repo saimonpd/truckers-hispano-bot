@@ -53,6 +53,8 @@ class SuggestionView(discord.ui.View):
         custom_id="suggestion_vote_negative_btn",
         row=0
     )
+
+    # Funciones encagadas del procesamiento de los votos
     async def vote_negative(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.handle_vote(interaction, positive=False)
 
@@ -79,6 +81,8 @@ class SuggestionView(discord.ui.View):
             # Actualizar el embed con los nuevos votos y porcentajes en tiempo real
             await interaction.message.edit(embed=nuevo_embed, view=self)
             await interaction.followup.send(texto_respuesta, ephemeral=True)
+            await self._ensure_thread_exists(interaction.message, suggestion_id)
+            
         except ValueError as e:
             await interaction.followup.send(f"⚠️ {e}", ephemeral=True)
         except Exception as e:
@@ -87,3 +91,31 @@ class SuggestionView(discord.ui.View):
                 "❌ Ocurrió un error al registrar tu voto en la base de datos.",
                 ephemeral=True
             )
+
+    # Funcion encargada de crear el hilo
+    async def _ensure_thread_exists(self, message: discord.Message, suggestion_id: int | None = None) -> discord.Thread | None:
+        """
+        Verifica si el mensaje ya tiene un hilo adjunto. Si no lo tiene,
+        crea uno automáticamente para la conversación de la sugerencia.
+        """
+
+        if message.thread is not None:
+            return message.thread
+
+        thread_name = f"💬 Discusión - Sugerencia #{suggestion_id}"
+
+        try:
+            thread = await message.create_thread(
+                name = thread_name,
+                reason = f"Discusión sobre la sugerencia #{suggestion_id}"
+            )
+
+            log.info(f"Hilo '{thread_name}' creado exitosamente para el mensaje {message.id}.")
+            return thread
+
+        except discord.Forbidden:
+            log.warning(f"No se tienen permisos suficientes (Create Public Threads) para crear un hilo en {message.channel.id}.")
+        except discord.HTTPException as e:
+            log.error(f"Error HTTP al intentar crear un hilo en el mensaje {message.id}: {e}")
+        except Exception as e:
+            log.error(f"Error insospechado al crear el hilo: {e}")

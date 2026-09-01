@@ -13,7 +13,7 @@ def get_suggestion_color(status: str | None) -> discord.Color:
 
 def build_suggestion_embed(data: dict) -> discord.Embed:
     embed = discord.Embed(
-        title="📩 NUEVA SUGERENCIA RECIBIDA",
+        title=f"📩 NUEVA SUGERENCIA RECIBIDA | {data.get('user_name')}",
         description=data.get('description'),
         color=get_suggestion_color(data.get('status'))
     )
@@ -34,8 +34,7 @@ def build_suggestion_embed(data: dict) -> discord.Embed:
     embed.add_field(
         name="\n📊 Votación de la Comunidad",
         value=(
-            f"👍 **A favor:** `{pos_votes}` ({pos_percent}%)\n"
-            f"👎 **En contra:** `{neg_votes}` ({neg_percent}%)\n"
+            f"✅ **A favor:** `{pos_votes} ({pos_percent}%)`     ❌ **En contra:** `{neg_votes} ({neg_percent}%)`\n"
             f"👥 **Total de votos:** `{total_votes}`"
         ),
         inline=False

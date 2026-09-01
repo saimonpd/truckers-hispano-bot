@@ -48,8 +48,8 @@ def suggestion_save(data: dict) -> dict | None:
     Inserta una nueva sugerencia en la base de datos.
     """
     query = """
-        INSERT INTO suggestion (id_user, id_channel, id_message, description)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO suggestion (id_user, user_name, id_channel, id_message, description)
+        VALUES (%s, %s, %s, %s, %s)
     """
 
     conn = None
@@ -58,6 +58,7 @@ def suggestion_save(data: dict) -> dict | None:
         cursor = conn.cursor()
         cursor.execute(query, (
             data["id_user"],
+            data["user_name"],
             data["id_channel"],
             data["id_message"],
             data["description"],
@@ -75,6 +76,7 @@ def suggestion_save(data: dict) -> dict | None:
             "id_channel": data["id_channel"],
             "id_message": data["id_message"],
             "description": data["description"],
+            "user_name": data.get("user_name"),
             "positive_votes": 0,
             "negative_votes": 0,
             "status": "Pendiente",

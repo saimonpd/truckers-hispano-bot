@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS suggestion (
     id_user VARCHAR(64) NOT NULL,
     id_channel VARCHAR(64) NOT NULL,
     id_message VARCHAR(64) NOT NULL,
+    user_name VARCHAR(255),
     description TEXT NOT NULL,
     moderator_id VARCHAR(64),
     moderator_name VARCHAR(255),

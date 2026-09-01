@@ -12,11 +12,12 @@ from ui.embeds.suggestion_builders import build_suggestion_embed
 log = logging.getLogger("suggestion")
 
 
-async def suggestion_create(channel: discord.TextChannel, data: dict) -> dict:
+async def suggestion_create(channel: discord.TextChannel, interaction: discord.Interaction, data: dict) -> dict:
     try:
         data["id_user"] = str(data["author_id"])
         data["description"] = data["description"]
         data["id_channel"] = str(channel.id)
+        data["user_name"] = str(interaction.user.display_name)
 
         message_id, msg = await _publish_on_discord(channel, data)
         data["id_message"] = message_id
