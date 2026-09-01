@@ -3,21 +3,18 @@ from database.repositories.suggestion_repository import (
     suggestion_save,
     update_suggestion_status,
 )
+from database.repositories.vote_repository import save_or_update_vote
 from database.models.suggestion import SuggestionStatus
 import discord
 import logging
 from ui.embeds.suggestion_builders import build_suggestion_embed
 
-log = logging.getLogger("suggestions")
+log = logging.getLogger("suggestion")
 
 
 async def suggestion_create(channel: discord.TextChannel, data: dict) -> dict:
-    if discord.utils.get(channel.guild.channels, name=data["title"]):
-        raise ValueError(f"Ya existe una sugerencia con el título '{data['title']}'.")
-
     try:
         data["id_user"] = str(data["author_id"])
-        data["title"] = data["title"]
         data["description"] = data["description"]
         data["id_channel"] = str(channel.id)
 
@@ -44,7 +41,7 @@ async def suggestion_create(channel: discord.TextChannel, data: dict) -> dict:
     except ValueError:
         raise
     except Exception as e:
-        log.error(f"Error creando sugerencia '{data.get('title')}': {e}")
+        log.error(f"Error creando sugerencia: {e}")
         raise RuntimeError("Hubo un error al crear la sugerencia.")
 
 async def suggestion_resolve(
@@ -92,8 +89,10 @@ async def suggestion_resolve(
                 target_channel = await bot.fetch_channel(int(channel_id))
 
             if target_channel:
+                from ui.views.suggestion_views import SuggestionView
                 msg = await target_channel.fetch_message(int(message_id))
-                await msg.edit(embed=build_suggestion_embed(suggestion))
+                disabled_view = SuggestionView(suggestion_id=suggestion_id, disabled=True)
+                await msg.edit(embed=build_suggestion_embed(suggestion), view=disabled_view)
 
     except Exception as e:
         log.warning(f"No se pudo editar el mensaje de Discord de la sugerencia #{suggestion_id}: {e}")
@@ -114,3 +113,32 @@ async def _publish_on_discord(channel: discord.TextChannel, data: dict) -> tuple
     )
 
     return str(msg.id), msg
+
+async def process_suggestion_vote(suggestion_id: int, user_id: str, vote_type: str) -> tuple[str, discord.Embed]:
+    """
+    Registra el voto de un usuario en la tabla suggestion_vote (database/models/vote.py)
+    y devuelve el texto de confirmación junto con el Embed actualizado.
+    """
+    # Comprobar que la sugerencia exista y no esté resuelta
+    suggestion = get_suggestion_by_id(suggestion_id)
+    if not suggestion:
+        raise ValueError(f"No se encontró la sugerencia con ID `#{suggestion_id}`.")
+
+    if suggestion.get("status") != SuggestionStatus.PENDING.value:
+        raise ValueError(f"Esta sugerencia ya está finalizada con estado **'{suggestion.get('status')}'**.")
+
+    # Registrar el voto en BD
+    exito = save_or_update_vote(suggestion_id=suggestion_id, user_id=user_id, vote_type=vote_type)
+    if not exito:
+        raise RuntimeError("No se pudo registrar el voto en la base de datos.")
+
+    # Obtener la sugerencia actualizada con los nuevos votos
+    suggestion_actualizada = get_suggestion_by_id(suggestion_id)
+    if not suggestion_actualizada:
+        suggestion_actualizada = suggestion
+
+    tipo_txt = "positivo" if vote_type == "positive" else "negativo"
+    texto_respuesta = f"✅ Has registrado tu voto **{tipo_txt}** en la sugerencia."
+    nuevo_embed = build_suggestion_embed(suggestion_actualizada)
+
+    return texto_respuesta, nuevo_embed

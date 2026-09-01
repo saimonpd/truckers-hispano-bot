@@ -13,26 +13,46 @@ def get_suggestion_color(status: str | None) -> discord.Color:
 
 def build_suggestion_embed(data: dict) -> discord.Embed:
     embed = discord.Embed(
-        title=f"💡 {data.get('title')}",
+        title="📩 NUEVA SUGERENCIA RECIBIDA",
         description=data.get('description'),
         color=get_suggestion_color(data.get('status'))
     )
 
+    # Obtener votos
+    pos_votes = int(data.get("positive_votes") or 0)
+    neg_votes = int(data.get("negative_votes") or 0)
+    total_votes = pos_votes + neg_votes
+
+    # Calcular porcentajes de votos
+    if total_votes > 0:
+        pos_percent = round((pos_votes / total_votes) * 100, 1)
+        neg_percent = round((neg_votes / total_votes) * 100, 1)
+    else:
+        pos_percent = 0.0
+        neg_percent = 0.0
+
     embed.add_field(
-        name="Información de la Sugerencia",
+        name="\n📊 Votación de la Comunidad",
         value=(
-            f"> 👤 **Autor:** <@{data.get('id_user')}>\n"
-            f"> 🆔 **ID de Sugerencia:** {data.get('suggestion_id', data.get('id'))}\n"
-            f"> 📊 **Estado:** {data.get('status')}\n"            
+            f"👍 **A favor:** `{pos_votes}` ({pos_percent}%)\n"
+            f"👎 **En contra:** `{neg_votes}` ({neg_percent}%)\n"
+            f"👥 **Total de votos:** `{total_votes}`"
         ),
         inline=False
     )
 
+    # Campo de respuesta del moderador (si existe)
     if data.get("moderator_answer"):
         embed.add_field(
-            name=f"Respuesta de {data.get('moderator_name', 'Moderación')}",
+            name=f"\n👮 Respuesta de {data.get('moderator_name', 'Moderación')}",
             value=f"> {data.get('moderator_answer')}",
             inline=False
         )
+
+    # Footer con ID de sugerencia
+    suggestion_id = data.get("suggestion_id") or data.get("id") or "N/A"
+    embed.set_footer(
+        text=f"ID: {suggestion_id} • Usa '/crear_sugerencia' para enviar una sugerencia"
+    )
 
     return embed

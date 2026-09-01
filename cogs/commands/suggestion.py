@@ -16,14 +16,12 @@ class Suggestion(commands.Cog):
     async def c_suggestion_create(
         self,
         interaction: discord.Interaction,
-        suggestion_title: str,
-        suggestion_description: str,
+        sugerencia: str,
     ):
         await interaction.response.defer(ephemeral=True)
 
         data = {
-            "title": suggestion_title,
-            "description": suggestion_description,
+            "description": sugerencia,
             "author_id": str(interaction.user.id),
             "guild_id": str(interaction.guild.id)
         }
@@ -31,13 +29,13 @@ class Suggestion(commands.Cog):
         # Guardar la sugerencia en la base de datos y enviar un mensaje de confirmación al usuario.
         try:
             await suggestion_create(channel=interaction.channel, data=data)
-            await interaction.followup.send(f"✅ Sugerencia **{suggestion_title}** creada con éxito.")
+            await interaction.followup.send(f"✅ Sugerencia creada con éxito.")
 
         except ValueError as e:
             await interaction.followup.send(f"⚠️ {e}")
 
         except RuntimeError as e:
-            log.error(f"Error creando sugerencia '{suggestion_title}': {e}")
+            log.error(f"Error creando sugerencia: {e}")
             await interaction.followup.send(f"❌ {e}")
 
     @app_commands.command(name="resolver_sugerencia", description="[Solo administración] Resuelve una sugerencia existente")
