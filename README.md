@@ -206,8 +206,7 @@ Usuario pulsa "Avisos Ruteos"
 - La vista se registra en `main.py` mediante `bot.add_view(RouteView())` durante `setup_hook`.
 - La vista creada para cada mensaje recibe el diccionario original y expone `self.game` para seleccionar el canal de voz.
 - El `route_id` se asigna después de insertar el ruteo en BD; antes de ese momento los botones de inscripción no pueden operar.
-
-```
+- Actualmente, tras un reinicio, la vista registrada globalmente no recupera automáticamente el `game` ni el `route_id` de los ruteos ya publicados. Para que esos botones sigan funcionando después de reiniciar, será necesario reconstruir y registrar una vista por ruteo a partir de los datos almacenados en BD.
 
 ## Arquitectura
 El proyecto sigue una estructura por capas para mantener separada la lógica de Discord de la lógica de negocio:
