@@ -90,7 +90,7 @@ def _check_persistent_views(bot: commands.Bot) -> CheckResult:
 
     # Vistas que main.py registra y que SÍ tienen custom_id, por lo tanto
     # DEBEN aparecer en bot.persistent_views para sobrevivir a un reinicio.
-    esperadas_persistentes = {"EventView"}
+    esperadas_persistentes = {"EventView", "SuggestionView"}
 
     faltantes = esperadas_persistentes - nombres_registrados
     if faltantes:

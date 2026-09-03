@@ -2,7 +2,6 @@ import discord
 
 def build_event_embed(data: dict) -> discord.Embed:
     embed = discord.Embed(
-        title=f"📢 {data.get('titulo')}",
         description=data.get('descripcion'),
         color=discord.Color.greyple()
     )

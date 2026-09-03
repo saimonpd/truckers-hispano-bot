@@ -40,6 +40,7 @@ def validar_tiempos_evento(fecha: str, hora_reunion: str, hora_salida: str) -> d
         "dt_salida": dt_salida,
         "ts_reunion": ts_reunion,
         "ts_salida": ts_salida,
-        "discord_reunion": f"<t:{ts_reunion}:F> (<t:{ts_reunion}:R>)",
+        "discord_fecha": f"<t:{ts_reunion}:D> (<t:{ts_reunion}:R>)",
+        "discord_reunion": f"<t:{ts_reunion}:t>",
         "discord_salida": f"<t:{ts_salida}:t>"
     }

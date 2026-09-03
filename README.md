@@ -62,6 +62,90 @@ Usuario pulsa "✅ Apuntarse / Desapuntarse"
 
 **Manejo de errores:** se distingue entre errores de negocio (`ValueError`, con mensaje pensado para el usuario) y errores técnicos (`RuntimeError`, registrados internamente con `log.error()`, mostrando al usuario un mensaje genérico sin exponer detalles internos).
 
+### Sistema de Sugerencias
+Permite a los miembros proponer mejoras para el servidor, votar a favor o en contra de cada propuesta y debatirla en un hilo. El equipo de staff puede cambiar el estado de una sugerencia y añadir una respuesta visible para la comunidad.
+
+**Comandos:**
+- `/crear_sugerencia` — Disponible para cualquier miembro.
+- `/resolver_sugerencia` — Requiere el rol `ROLE_STAFF`.
+
+**Parámetros de `/crear_sugerencia`:** `sugerencia` (texto de la propuesta).
+
+**Parámetros de `/resolver_sugerencia`:** `suggestion_id` (ID de la sugerencia), `resolution` (estado nuevo) y `respuesta` (explicación del moderador).
+
+**Estados disponibles:**
+- `Pendiente` — estado inicial; la comunidad puede votar.
+- `En Revisión` — la propuesta está siendo revisada por el staff.
+- `Aceptada` — la propuesta ha sido aprobada.
+- `Rechazada` — la propuesta ha sido denegada.
+
+**Flujo de creación:**
+```
+/crear_sugerencia (comando)
+   → defer()                         [reserva la respuesta efímera]
+   → construye data                  [descripción, autor y servidor]
+   → suggestion_create()             [servicio]
+       → añade id_channel y user_name
+       → build_suggestion_embed()   [construye el embed inicial]
+       → SuggestionView()           [crea los botones de voto]
+       → channel.send(embed, view)  [publica la sugerencia]
+       → suggestion_save(data)      [guarda el mensaje y obtiene su ID]
+       → msg.edit(embed=...)        [muestra el ID asignado en el footer]
+   → followup.send()                 [confirma la creación al autor]
+```
+
+**Flujo de votación:**
+```
+Usuario pulsa "✅" o "❌"
+   → SuggestionView.handle_vote()
+       → extrae suggestion_id del footer del embed
+       → process_suggestion_vote()  [servicio]
+           → comprueba que la sugerencia existe
+           → comprueba que sigue en estado Pendiente
+           → save_or_update_vote() [inserta o actualiza el voto del usuario]
+           → recupera los conteos actualizados
+           → build_suggestion_embed() [recalcula votos y porcentajes]
+       → edita el embed del mensaje
+       → confirma el voto de forma efímera
+       → crea el hilo de discusión si todavía no existe
+```
+
+Si un usuario vuelve a votar, su voto anterior se actualiza en lugar de crear un voto duplicado. El embed muestra votos positivos, votos negativos, porcentajes y el total de votos.
+
+**Flujo de resolución por staff:**
+```
+/resolver_sugerencia (comando, requiere ROLE_STAFF)
+   → suggestion_resolve()            [servicio]
+       → recupera la sugerencia por ID
+       → comprueba que existe y está Pendiente
+       → update_suggestion_status() [guarda estado y respuesta del moderador]
+       → recupera el canal y el mensaje de Discord
+       → build_suggestion_embed()   [actualiza color y respuesta]
+       → SuggestionView(disabled=True)
+       → msg.edit(embed, view)      [bloquea los botones de voto]
+   → followup.send()                  [confirma el nuevo estado al staff]
+```
+
+**Persistencia:**
+- `suggestion` almacena el autor, su nombre visible, el canal, el mensaje, la descripción, el estado y los datos de resolución.
+- `suggestion_vote` almacena un voto por usuario y sugerencia, con tipo `positive` o `negative`.
+- Los conteos se calculan desde `suggestion_vote` cada vez que se recupera la sugerencia; no se mantienen como valores independientes.
+- Si falla el guardado en BD después de publicar el mensaje, el servicio intenta eliminar el mensaje para evitar una sugerencia sin registro.
+
+**Reglas de negocio y errores:**
+- Solo las sugerencias `Pendiente` aceptan votos y pueden resolverse.
+- Una sugerencia inexistente produce un error de negocio legible para el usuario.
+- Los errores técnicos de creación o votación se registran y se responde con un mensaje genérico.
+- Si no se puede actualizar el mensaje de Discord después de resolver la sugerencia, el cambio de BD se conserva y el fallo se registra como advertencia.
+- Si el bot no tiene permiso para crear hilos, la sugerencia y el voto se mantienen; únicamente se registra el fallo de creación del hilo.
+
+**Embed y vista persistente:**
+- `build_suggestion_embed()` usa un color distinto según el estado y muestra la respuesta del moderador cuando existe.
+- `SuggestionView` usa `timeout=None` y `custom_id` fijos para los botones de voto.
+- La vista se registra durante `setup_hook` mediante `bot.add_view(SuggestionView())`.
+- Para mensajes ya publicados, la vista puede recuperar el ID desde el footer del embed si no lo recibe explícitamente en el constructor.
+- Al resolver una sugerencia se crea una vista deshabilitada para impedir nuevos votos desde ese mensaje.
+
 ### Sistema de Moderación
 Comandos de administración restringidos por permisos nativos de Discord (no por rol específico, sino por el permiso asociado: `kick_members`, `ban_members`, `mute_members`, `manage_nicknames`).
 
@@ -123,6 +207,90 @@ Permite a los encargados registrar empresas de la comunidad directamente desde D
 **Manejo de errores y reversión (rollback):** si falla cualquier paso de `crear_empresa()` después de haber creado el rol y/o el canal en Discord (por ejemplo, un error al guardar en BD), el servicio revierte lo ya creado —borra el canal y el rol— para no dejar recursos huérfanos en el servidor. En `eliminar_empresa()`, si el dueño ya no está en el servidor se registra un `warning` y se continúa con el resto de la limpieza en vez de abortar.
 
 **Diseño de la capa de servicio:** al igual que en el sistema de eventos, `crear_empresa(guild, data)` y `eliminar_empresa(guild, rol_id, canal_interaccion)` reciben un `discord.Guild` (necesario para operar roles/canales) junto a tipos primitivos (`dict`, `str`), no objetos de comando o interacción — mismo patrón pensado para una futura reutilización desde una API.
+
+### Sistema de Creación de Ruteos
+Permite a cualquier usuario crear ruteos desde Discord y publicarlos como un embed interactivo. El mensaje se publica en el canal desde el que se ejecuta el comando. Los miembros pueden apuntarse, desapuntarse, acceder al canal de voz correspondiente al juego y activar o desactivar los avisos de ruteos desde los botones del propio mensaje.
+
+**Comando:** `/crear_ruteo`
+
+**Parámetros obligatorios:** `juego`, `servidor`, `fecha` (`DD/MM/YYYY`), `hora_reunion` (`HH:MM`), `hora_salida` (`HH:MM`)
+
+**Parámetros opciones:** `dlc`
+
+**Flujo de creación:**
+```
+/crear_ruteo (comando)
+   → defer()                         [reserva la respuesta efímera]
+   → construye data                  [juego, servidor, fecha, horarios, DLC y autor]
+   → route_create()                  [servicio]
+       → validar_tiempos_evento()   [valida fecha y horas y genera timestamps]
+       → build_route_embed(data)    [construye el embed del ruteo]
+       → RouteView(data)             [crea botones y conserva data.game]
+       → channel.send(embed, view)  [publica el mensaje en el canal actual]
+       → save_route(data)            [guarda el ruteo en BD]
+       → view.route_id = route.id    [vincula los botones con el registro guardado]
+   → followup.send()                 [confirma la creación al autor]
+```
+
+**Datos utilizados:**
+- `game`: código del juego (`ets2` o `ats`).
+- `server`: código del servidor seleccionado.
+- `date`: fecha del ruteo en formato `DD/MM/YYYY`.
+- `meeting_date`: hora de reunión en formato `HH:MM`.
+- `departure_date`: hora de salida en formato `HH:MM`.
+- `required_dlc`: DLC requerido o texto por defecto.
+- `id_user`: usuario que crea el ruteo.
+- `message_id`: ID del mensaje publicado en Discord.
+
+**Flujo de interacción con los botones:**
+```
+Usuario pulsa "Apuntarme"
+   → RouteView.join_route()
+       → comprueba route_id
+       → adquiere un asyncio.Lock por ruteo
+       → route_join(route_id, user_id)
+           → INSERT en route_participant
+           → recupera el ruteo y sus participantes
+           → recalcula los timestamps Discord
+           → reconstruye el embed
+       → edita el mensaje con el embed actualizado
+       → confirma la inscripción
+
+Usuario pulsa "Desapuntarme"
+   → RouteView.leave_route()
+       → mismo flujo, eliminando el registro de route_participant
+
+Usuario pulsa "Canal de voz"
+   → RouteView.join_voice_channel()
+       → usa data.game para elegir la URL de ETS2 o ATS
+       → envía el enlace del canal de voz
+
+Usuario pulsa "Avisos Ruteos"
+   → RouteView.toggle_role()
+       → comprueba ROLE_NOTIFICACION_RUTEOS
+       → añade o elimina el rol según el estado actual del usuario
+```
+
+**Persistencia:**
+- `route` almacena el ruteo, el autor, el mensaje de Discord, el juego, el servidor, la fecha, los horarios y los DLC.
+- `route_participant` relaciona el `message_id` del ruteo con el `user_id` de cada participante.
+- Los timestamps y textos formateados para Discord no se guardan; se recalculan al reconstruir el embed.
+- Si el ruteo no se puede guardar después de publicar el mensaje, el servicio intenta borrar ese mensaje para evitar un ruteo publicado sin registro en BD.
+
+**Reglas de negocio y concurrencia:**
+- La fecha debe existir y tener formato `DD/MM/YYYY`.
+- Las horas deben tener formato `HH:MM` en formato de 24 horas.
+- La reunión no puede estar en el pasado.
+- La salida debe ser posterior a la reunión.
+- Un usuario no puede apuntarse dos veces al mismo ruteo; la restricción de integridad de la BD lo impide.
+- Cada ruteo tiene su propio `asyncio.Lock`, por lo que las inscripciones simultáneas del mismo ruteo se serializan sin bloquear otros ruteos.
+
+**Botones y vista persistente:**
+- `RouteView` usa `timeout=None` y `custom_id` fijos para que Discord pueda identificar sus botones después de reiniciar el bot.
+- La vista se registra en `main.py` mediante `bot.add_view(RouteView())` durante `setup_hook`.
+- La vista creada para cada mensaje recibe el diccionario original y expone `self.game` para seleccionar el canal de voz.
+- El `route_id` se asigna después de insertar el ruteo en BD; antes de ese momento los botones de inscripción no pueden operar.
+- Actualmente, tras un reinicio, la vista registrada globalmente no recupera automáticamente el `game` ni el `route_id` de los ruteos ya publicados. Para que esos botones sigan funcionando después de reiniciar, será necesario reconstruir y registrar una vista por ruteo a partir de los datos almacenados en BD.
 
 ## Arquitectura
 El proyecto sigue una estructura por capas para mantener separada la lógica de Discord de la lógica de negocio:
