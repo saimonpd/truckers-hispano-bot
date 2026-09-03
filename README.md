@@ -62,6 +62,90 @@ Usuario pulsa "✅ Apuntarse / Desapuntarse"
 
 **Manejo de errores:** se distingue entre errores de negocio (`ValueError`, con mensaje pensado para el usuario) y errores técnicos (`RuntimeError`, registrados internamente con `log.error()`, mostrando al usuario un mensaje genérico sin exponer detalles internos).
 
+### Sistema de Sugerencias
+Permite a los miembros proponer mejoras para el servidor, votar a favor o en contra de cada propuesta y debatirla en un hilo. El equipo de staff puede cambiar el estado de una sugerencia y añadir una respuesta visible para la comunidad.
+
+**Comandos:**
+- `/crear_sugerencia` — Disponible para cualquier miembro.
+- `/resolver_sugerencia` — Requiere el rol `ROLE_STAFF`.
+
+**Parámetros de `/crear_sugerencia`:** `sugerencia` (texto de la propuesta).
+
+**Parámetros de `/resolver_sugerencia`:** `suggestion_id` (ID de la sugerencia), `resolution` (estado nuevo) y `respuesta` (explicación del moderador).
+
+**Estados disponibles:**
+- `Pendiente` — estado inicial; la comunidad puede votar.
+- `En Revisión` — la propuesta está siendo revisada por el staff.
+- `Aceptada` — la propuesta ha sido aprobada.
+- `Rechazada` — la propuesta ha sido denegada.
+
+**Flujo de creación:**
+```
+/crear_sugerencia (comando)
+   → defer()                         [reserva la respuesta efímera]
+   → construye data                  [descripción, autor y servidor]
+   → suggestion_create()             [servicio]
+       → añade id_channel y user_name
+       → build_suggestion_embed()   [construye el embed inicial]
+       → SuggestionView()           [crea los botones de voto]
+       → channel.send(embed, view)  [publica la sugerencia]
+       → suggestion_save(data)      [guarda el mensaje y obtiene su ID]
+       → msg.edit(embed=...)        [muestra el ID asignado en el footer]
+   → followup.send()                 [confirma la creación al autor]
+```
+
+**Flujo de votación:**
+```
+Usuario pulsa "✅" o "❌"
+   → SuggestionView.handle_vote()
+       → extrae suggestion_id del footer del embed
+       → process_suggestion_vote()  [servicio]
+           → comprueba que la sugerencia existe
+           → comprueba que sigue en estado Pendiente
+           → save_or_update_vote() [inserta o actualiza el voto del usuario]
+           → recupera los conteos actualizados
+           → build_suggestion_embed() [recalcula votos y porcentajes]
+       → edita el embed del mensaje
+       → confirma el voto de forma efímera
+       → crea el hilo de discusión si todavía no existe
+```
+
+Si un usuario vuelve a votar, su voto anterior se actualiza en lugar de crear un voto duplicado. El embed muestra votos positivos, votos negativos, porcentajes y el total de votos.
+
+**Flujo de resolución por staff:**
+```
+/resolver_sugerencia (comando, requiere ROLE_STAFF)
+   → suggestion_resolve()            [servicio]
+       → recupera la sugerencia por ID
+       → comprueba que existe y está Pendiente
+       → update_suggestion_status() [guarda estado y respuesta del moderador]
+       → recupera el canal y el mensaje de Discord
+       → build_suggestion_embed()   [actualiza color y respuesta]
+       → SuggestionView(disabled=True)
+       → msg.edit(embed, view)      [bloquea los botones de voto]
+   → followup.send()                  [confirma el nuevo estado al staff]
+```
+
+**Persistencia:**
+- `suggestion` almacena el autor, su nombre visible, el canal, el mensaje, la descripción, el estado y los datos de resolución.
+- `suggestion_vote` almacena un voto por usuario y sugerencia, con tipo `positive` o `negative`.
+- Los conteos se calculan desde `suggestion_vote` cada vez que se recupera la sugerencia; no se mantienen como valores independientes.
+- Si falla el guardado en BD después de publicar el mensaje, el servicio intenta eliminar el mensaje para evitar una sugerencia sin registro.
+
+**Reglas de negocio y errores:**
+- Solo las sugerencias `Pendiente` aceptan votos y pueden resolverse.
+- Una sugerencia inexistente produce un error de negocio legible para el usuario.
+- Los errores técnicos de creación o votación se registran y se responde con un mensaje genérico.
+- Si no se puede actualizar el mensaje de Discord después de resolver la sugerencia, el cambio de BD se conserva y el fallo se registra como advertencia.
+- Si el bot no tiene permiso para crear hilos, la sugerencia y el voto se mantienen; únicamente se registra el fallo de creación del hilo.
+
+**Embed y vista persistente:**
+- `build_suggestion_embed()` usa un color distinto según el estado y muestra la respuesta del moderador cuando existe.
+- `SuggestionView` usa `timeout=None` y `custom_id` fijos para los botones de voto.
+- La vista se registra durante `setup_hook` mediante `bot.add_view(SuggestionView())`.
+- Para mensajes ya publicados, la vista puede recuperar el ID desde el footer del embed si no lo recibe explícitamente en el constructor.
+- Al resolver una sugerencia se crea una vista deshabilitada para impedir nuevos votos desde ese mensaje.
+
 ### Sistema de Moderación
 Comandos de administración restringidos por permisos nativos de Discord (no por rol específico, sino por el permiso asociado: `kick_members`, `ban_members`, `mute_members`, `manage_nicknames`).
 
