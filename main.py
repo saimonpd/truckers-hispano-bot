@@ -7,6 +7,7 @@ from config.config import TOKEN
 from ui.views.welcome_views import WelcomeView
 from ui.views.event_views import EventView
 from ui.views.suggestion_views import SuggestionView
+from ui.views.route_views import RouteView
 from database.connection import init_pool
 from utils.startup_checks import run_startup_checks
 
@@ -39,6 +40,7 @@ class MyBot(commands.Bot):
         self.add_view(WelcomeView())
         self.add_view(EventView())
         self.add_view(SuggestionView())
+        self.add_view(RouteView())
 
         # Carga automaticamente todos los /cogs que tenemos 
         for root, dirs, files in os.walk("cogs"):

@@ -13,7 +13,7 @@ def get_suggestion_color(status: str | None) -> discord.Color:
 
 def build_suggestion_embed(data: dict) -> discord.Embed:
     embed = discord.Embed(
-        title=f"📩 NUEVA SUGERENCIA RECIBIDA | {data.get('user_name')}",
+        title=f"📩 Nueva sugerencia recibida",
         description=data.get('description'),
         color=get_suggestion_color(data.get('status'))
     )
@@ -34,8 +34,8 @@ def build_suggestion_embed(data: dict) -> discord.Embed:
     embed.add_field(
         name="\n📊 Votación de la Comunidad",
         value=(
-            f"✅ **A favor:** `{pos_votes} ({pos_percent}%)`     ❌ **En contra:** `{neg_votes} ({neg_percent}%)`\n"
-            f"👥 **Total de votos:** `{total_votes}`"
+            f"✅ `{pos_votes} ({pos_percent}%)`⬛`❌ {neg_votes} ({neg_percent}%)`\n"
+            f"👥 Total de votos: `{total_votes}`"
         ),
         inline=False
     )
@@ -49,9 +49,9 @@ def build_suggestion_embed(data: dict) -> discord.Embed:
         )
 
     # Footer con ID de sugerencia
-    suggestion_id = data.get("suggestion_id") or data.get("id") or "N/A"
+    suggestion_id = data.get("suggestion_id") or data.get("id")
     embed.set_footer(
-        text=f"ID: {suggestion_id} • Usa '/crear_sugerencia' para enviar una sugerencia"
+        text=f"ID: {suggestion_id} • @{data.get('user_name')}"
     )
 
     return embed

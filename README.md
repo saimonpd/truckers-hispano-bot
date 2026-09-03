@@ -124,6 +124,91 @@ Permite a los encargados registrar empresas de la comunidad directamente desde D
 
 **Diseño de la capa de servicio:** al igual que en el sistema de eventos, `crear_empresa(guild, data)` y `eliminar_empresa(guild, rol_id, canal_interaccion)` reciben un `discord.Guild` (necesario para operar roles/canales) junto a tipos primitivos (`dict`, `str`), no objetos de comando o interacción — mismo patrón pensado para una futura reutilización desde una API.
 
+### Sistema de Creación de Ruteos
+Permite a cualquier usuario crear ruteos desde Discord y publicarlos como un embed interactivo. El mensaje se publica en el canal desde el que se ejecuta el comando. Los miembros pueden apuntarse, desapuntarse, acceder al canal de voz correspondiente al juego y activar o desactivar los avisos de ruteos desde los botones del propio mensaje.
+
+**Comando:** `/crear_ruteo`
+
+**Parámetros obligatorios:** `juego`, `servidor`, `fecha` (`DD/MM/YYYY`), `hora_reunion` (`HH:MM`), `hora_salida` (`HH:MM`)
+
+**Parámetros opciones:** `dlc`
+
+**Flujo de creación:**
+```
+/crear_ruteo (comando)
+   → defer()                         [reserva la respuesta efímera]
+   → construye data                  [juego, servidor, fecha, horarios, DLC y autor]
+   → route_create()                  [servicio]
+       → validar_tiempos_evento()   [valida fecha y horas y genera timestamps]
+       → build_route_embed(data)    [construye el embed del ruteo]
+       → RouteView(data)             [crea botones y conserva data.game]
+       → channel.send(embed, view)  [publica el mensaje en el canal actual]
+       → save_route(data)            [guarda el ruteo en BD]
+       → view.route_id = route.id    [vincula los botones con el registro guardado]
+   → followup.send()                 [confirma la creación al autor]
+```
+
+**Datos utilizados:**
+- `game`: código del juego (`ets2` o `ats`).
+- `server`: código del servidor seleccionado.
+- `date`: fecha del ruteo en formato `DD/MM/YYYY`.
+- `meeting_date`: hora de reunión en formato `HH:MM`.
+- `departure_date`: hora de salida en formato `HH:MM`.
+- `required_dlc`: DLC requerido o texto por defecto.
+- `id_user`: usuario que crea el ruteo.
+- `message_id`: ID del mensaje publicado en Discord.
+
+**Flujo de interacción con los botones:**
+```
+Usuario pulsa "Apuntarme"
+   → RouteView.join_route()
+       → comprueba route_id
+       → adquiere un asyncio.Lock por ruteo
+       → route_join(route_id, user_id)
+           → INSERT en route_participant
+           → recupera el ruteo y sus participantes
+           → recalcula los timestamps Discord
+           → reconstruye el embed
+       → edita el mensaje con el embed actualizado
+       → confirma la inscripción
+
+Usuario pulsa "Desapuntarme"
+   → RouteView.leave_route()
+       → mismo flujo, eliminando el registro de route_participant
+
+Usuario pulsa "Canal de voz"
+   → RouteView.join_voice_channel()
+       → usa data.game para elegir la URL de ETS2 o ATS
+       → envía el enlace del canal de voz
+
+Usuario pulsa "Avisos Ruteos"
+   → RouteView.toggle_role()
+       → comprueba ROLE_NOTIFICACION_RUTEOS
+       → añade o elimina el rol según el estado actual del usuario
+```
+
+**Persistencia:**
+- `route` almacena el ruteo, el autor, el mensaje de Discord, el juego, el servidor, la fecha, los horarios y los DLC.
+- `route_participant` relaciona el `message_id` del ruteo con el `user_id` de cada participante.
+- Los timestamps y textos formateados para Discord no se guardan; se recalculan al reconstruir el embed.
+- Si el ruteo no se puede guardar después de publicar el mensaje, el servicio intenta borrar ese mensaje para evitar un ruteo publicado sin registro en BD.
+
+**Reglas de negocio y concurrencia:**
+- La fecha debe existir y tener formato `DD/MM/YYYY`.
+- Las horas deben tener formato `HH:MM` en formato de 24 horas.
+- La reunión no puede estar en el pasado.
+- La salida debe ser posterior a la reunión.
+- Un usuario no puede apuntarse dos veces al mismo ruteo; la restricción de integridad de la BD lo impide.
+- Cada ruteo tiene su propio `asyncio.Lock`, por lo que las inscripciones simultáneas del mismo ruteo se serializan sin bloquear otros ruteos.
+
+**Botones y vista persistente:**
+- `RouteView` usa `timeout=None` y `custom_id` fijos para que Discord pueda identificar sus botones después de reiniciar el bot.
+- La vista se registra en `main.py` mediante `bot.add_view(RouteView())` durante `setup_hook`.
+- La vista creada para cada mensaje recibe el diccionario original y expone `self.game` para seleccionar el canal de voz.
+- El `route_id` se asigna después de insertar el ruteo en BD; antes de ese momento los botones de inscripción no pueden operar.
+
+```
+
 ## Arquitectura
 El proyecto sigue una estructura por capas para mantener separada la lógica de Discord de la lógica de negocio:
 

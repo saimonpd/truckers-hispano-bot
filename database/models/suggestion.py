@@ -1,6 +1,5 @@
 from enum import StrEnum
 
-
 class SuggestionStatus(StrEnum):
     PENDING = "Pendiente"
     IN_REVISION = "En Revisión"

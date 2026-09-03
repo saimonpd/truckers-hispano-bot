@@ -2,7 +2,7 @@ import logging
 import pymysql.cursors
 from database.connection import obtener_conexion
 
-log = logging.getLogger("database")
+log = logging.getLogger("suggestion")
 
 
 def get_suggestion_by_id(suggestion_id: int) -> dict | None:

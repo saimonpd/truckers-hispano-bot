@@ -1,0 +1,14 @@
+TABLE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS route (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    id_user VARCHAR(64) NOT NULL,
+    message_id VARCHAR(64) NOT NULL UNIQUE,
+    game VARCHAR(255) NOT NULL,
+    server VARCHAR(255) NOT NULL,
+    date VARCHAR(255) NOT NULL,
+    meeting_date VARCHAR(255) NOT NULL,
+    departure_date VARCHAR(255) NOT NULL,
+    required_dlc VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+"""

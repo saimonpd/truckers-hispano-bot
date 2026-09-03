@@ -6,7 +6,7 @@ from config.roles import ROLE_STAFF
 from database.models.suggestion import SuggestionStatus
 
 import logging 
-log = logging.getLogger("events")
+log = logging.getLogger("suggestion")
 
 class Suggestion(commands.Cog):
     def __init__(self, bot):
@@ -74,5 +74,6 @@ class Suggestion(commands.Cog):
         except Exception as e:
             log.error(f"Error al resolver sugerencia {suggestion_id}: {e}")
             await interaction.followup.send("❌ Ocurrió un error al procesar la resolución de la sugerencia.")
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Suggestion(bot))
