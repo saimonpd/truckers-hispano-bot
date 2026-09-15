@@ -24,6 +24,7 @@ from config.roles import (
     ROLE_NOTIFICACION_EVENTOS,
     ROLE_ENCARGADO_EMPRESAS,
     ROLE_REPRESENTANTE_EMPRESA,
+    ROLE_STAFF
 )
 from config.channels import CHANNEL_WELCOME, CHANNEL_EVENTS, CATEGORIA_EMPRESAS_ID
 
@@ -146,6 +147,7 @@ async def run_startup_checks(bot: commands.Bot) -> bool:
         resultados.append(_check_role(guild, ROLE_NOTIFICACION_EVENTOS, "ROLE_NOTIFICACION_EVENTOS"))
         resultados.append(_check_role(guild, ROLE_ENCARGADO_EMPRESAS, "ROLE_ENCARGADO_EMPRESAS"))
         resultados.append(_check_role(guild, ROLE_REPRESENTANTE_EMPRESA, "ROLE_REPRESENTANTE_EMPRESA"))
+        resultados.append(_check_role(guild, ROLE_STAFF, "ROLE_STAFF"))
         resultados.append(_check_bot_permission(guild, "manage_roles", "Gestionar roles"))
         resultados.append(_check_bot_permission(guild, "manage_channels", "Gestionar canales"))
 
